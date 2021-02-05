@@ -1,5 +1,7 @@
 package com.codingeggs.todolist
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
@@ -21,13 +23,18 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         data.add(Todo("숙제", false))
-        data.add(Todo("청소", false))
+        data.add(Todo("청소", true))
 
-        binding.recyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
-        binding.recyclerView.adapter = TodoAdapter(data,
-        onClickDeleteIcon = {
-            deleteTodo(it)
-        })
+        binding.recyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = TodoAdapter(data,
+                onClickDeleteIcon = {
+                    deleteTodo(it)
+                },
+                onClickItem = {
+                    toggleTodo(it)
+                })
+        }
 
         // 추가기능 추가
         binding.addButton.setOnClickListener {
@@ -36,6 +43,12 @@ class MainActivity : AppCompatActivity() {
         }
 
 
+    }
+
+    // 완료기능
+    private fun toggleTodo(todo: Todo) {
+        todo.isDone = !todo.isDone
+        binding.recyclerView.adapter?.notifyDataSetChanged()
     }
 
     // 추가기능
@@ -61,7 +74,8 @@ data class Todo(
 
 class TodoAdapter(
     private val dataSet: List<Todo>,
-    val onClickDeleteIcon: (todo: Todo) -> Unit
+    val onClickDeleteIcon: (todo: Todo) -> Unit,
+    val onClickItem: (todo: Todo) -> Unit
 ) :
     RecyclerView.Adapter<TodoAdapter.TodoViewHolder>() {
     class TodoViewHolder(val item_binding: ItemTodoBinding) :
@@ -77,8 +91,25 @@ class TodoAdapter(
     override fun onBindViewHolder(viewHolder: TodoViewHolder, position: Int) {
         val todo = dataSet[position]
         viewHolder.item_binding.todoText.text = todo.text
+
+        if (todo.isDone) {
+            viewHolder.item_binding.todoText.apply {
+                paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+                setTypeface(null, Typeface.ITALIC)
+            }
+        } else {
+            viewHolder.item_binding.todoText.apply {
+                paintFlags = 0
+                setTypeface(null, Typeface.NORMAL)
+            }
+        }
+
         viewHolder.item_binding.deleteImageView.setOnClickListener {
             onClickDeleteIcon.invoke(todo)
+        }
+
+        viewHolder.item_binding.root.setOnClickListener {
+            onClickItem.invoke(todo)
         }
     }
 
