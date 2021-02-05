@@ -4,9 +4,12 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.activity.viewModels
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModel
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.codingeggs.todolist.databinding.ActivityMainBinding
@@ -15,55 +18,37 @@ import com.codingeggs.todolist.databinding.ItemTodoBinding
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
-    private val data = arrayListOf<Todo>()
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        data.add(Todo("숙제", false))
-        data.add(Todo("청소", true))
-
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = TodoAdapter(data,
+            adapter = TodoAdapter(
+                emptyList(),
                 onClickDeleteIcon = {
-                    deleteTodo(it)
+                    viewModel.deleteTodo(it)
                 },
                 onClickItem = {
-                    toggleTodo(it)
+                    viewModel.toggleTodo(it)
                 })
         }
 
         // 추가기능 추가
         binding.addButton.setOnClickListener {
-            Log.d("test", "setOnClickListener")
-            addTodo()
+            val todo = Todo(binding.editText.text.toString())
+            viewModel.addTodo(todo)
         }
 
+        // 관찰 UI 업데이트
+        viewModel.todoLiveData.observe(this, Observer {
+            (binding.recyclerView.adapter as TodoAdapter).setData(it)
+        })
 
     }
-
-    // 완료기능
-    private fun toggleTodo(todo: Todo) {
-        todo.isDone = !todo.isDone
-        binding.recyclerView.adapter?.notifyDataSetChanged()
-    }
-
-    // 추가기능
-    private fun addTodo() {
-        val todo = Todo(binding.editText.text.toString())
-        data.add(todo)
-        binding.recyclerView.adapter?.notifyDataSetChanged()    // recyclerview 갱신
-    }
-
-    // 삭제기능
-    private fun deleteTodo(todo: Todo) {
-        data.remove(todo)
-        binding.recyclerView.adapter?.notifyDataSetChanged()
-    }
-
 }
 
 data class Todo(
@@ -73,7 +58,7 @@ data class Todo(
 
 
 class TodoAdapter(
-    private val dataSet: List<Todo>,
+    private var dataSet: List<Todo>,
     val onClickDeleteIcon: (todo: Todo) -> Unit,
     val onClickItem: (todo: Todo) -> Unit
 ) :
@@ -114,4 +99,35 @@ class TodoAdapter(
     }
 
     override fun getItemCount() = dataSet.size
+
+    // 데이터 갱신 함수
+    fun setData(newData: List<Todo>) {
+        dataSet = newData
+        notifyDataSetChanged()
+    }
+}
+
+class MainViewModel : ViewModel() {
+    val todoLiveData = MutableLiveData<List<Todo>>()
+
+    private val data = arrayListOf<Todo>()  // 밖에서 수정을 막음 private
+
+    // 완료기능
+    fun toggleTodo(todo: Todo) {
+        todo.isDone = !todo.isDone
+        todoLiveData.value = data
+    }
+
+    // 추가기능
+    fun addTodo(todo: Todo) {
+        data.add(todo)
+        todoLiveData.value = data
+    }
+
+    // 삭제기능
+    fun deleteTodo(todo: Todo) {
+        data.remove(todo)
+        todoLiveData.value = data
+    }
+
 }
