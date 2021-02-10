@@ -20,6 +20,7 @@ import com.codingeggs.todolist.databinding.ItemTodoBinding
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.IdpResponse
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -133,9 +134,9 @@ data class Todo(
 
 
 class TodoAdapter(
-    private var dataSet: List<Todo>,
-    val onClickDeleteIcon: (todo: Todo) -> Unit,
-    val onClickItem: (todo: Todo) -> Unit
+    private var dataSet: List<DocumentSnapshot>,
+    val onClickDeleteIcon: (todo: DocumentSnapshot) -> Unit,
+    val onClickItem: (todo: DocumentSnapshot) -> Unit
 ) :
     RecyclerView.Adapter<TodoAdapter.TodoViewHolder>() {
     class TodoViewHolder(val item_binding: ItemTodoBinding) :
@@ -150,9 +151,9 @@ class TodoAdapter(
 
     override fun onBindViewHolder(viewHolder: TodoViewHolder, position: Int) {
         val todo = dataSet[position]
-        viewHolder.item_binding.todoText.text = todo.text
+        viewHolder.item_binding.todoText.text = todo.getString("text") ?: ""
 
-        if (todo.isDone) {
+        if (todo.getBoolean("isDone") == true) {
             viewHolder.item_binding.todoText.apply {
                 paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                 setTypeface(null, Typeface.ITALIC)
@@ -176,7 +177,7 @@ class TodoAdapter(
     override fun getItemCount() = dataSet.size
 
     // 데이터 갱신 함수
-    fun setData(newData: List<Todo>) {
+    fun setData(newData: List<DocumentSnapshot>) {
         dataSet = newData
         notifyDataSetChanged()
     }
@@ -185,46 +186,49 @@ class TodoAdapter(
 class MainViewModel : ViewModel() {
     val db = Firebase.firestore
 
-    val todoLiveData = MutableLiveData<List<Todo>>()
-
-    private val data = arrayListOf<Todo>()  // 밖에서 수정을 막음 private
+    val todoLiveData = MutableLiveData<List<DocumentSnapshot>>()
 
     init {
         fetchData()
     }
 
     fun fetchData() {
-        db.collection("todos")
-            .get()
-            .addOnSuccessListener { result ->
-                data.clear()
-                for (document in result) {
-                    val todo = Todo(
-                        document.data["text"] as String,
-                        document.data["isDone"] as Boolean,
-                    )
-                    data.add(todo)
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            db.collection(user.uid)
+                .addSnapshotListener { value, e ->
+                    if (e != null) {
+                        return@addSnapshotListener
+                    }
+
+                    if (value != null) {
+                        todoLiveData.value = value.documents
+                    }
                 }
-                todoLiveData.value = data
-            }
+        }
     }
 
     // 완료기능
-    fun toggleTodo(todo: Todo) {
-        todo.isDone = !todo.isDone
-        todoLiveData.value = data
+    fun toggleTodo(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            val isDone = todo.getBoolean("isDone") ?: false
+            db.collection(user.uid).document(todo.id).update("isDone", !isDone)
+        }
     }
 
     // 추가기능
     fun addTodo(todo: Todo) {
-        data.add(todo)
-        todoLiveData.value = data
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            db.collection(user.uid).add(todo).addOnSuccessListener { documentReference ->
+                Log.d(TAG, "DocumentSnapshot written with ID: ${documentReference.id}")
+            }
+        }
     }
 
     // 삭제기능
-    fun deleteTodo(todo: Todo) {
-        data.remove(todo)
-        todoLiveData.value = data
+    fun deleteTodo(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            db.collection(user.uid).document(todo.id).delete()
+        }
     }
-
 }
