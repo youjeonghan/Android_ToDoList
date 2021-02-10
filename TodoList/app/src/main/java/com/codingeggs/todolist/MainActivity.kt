@@ -1,11 +1,13 @@
 package com.codingeggs.todolist
 
 import android.app.Activity
+import android.content.ContentValues.TAG
 import android.content.Intent
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.view.*
 import androidx.activity.viewModels
 import androidx.lifecycle.MutableLiveData
@@ -18,6 +20,8 @@ import com.codingeggs.todolist.databinding.ItemTodoBinding
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.IdpResponse
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 
 class MainActivity : AppCompatActivity() {
     val RC_SIGN_IN = 1000
@@ -73,7 +77,7 @@ class MainActivity : AppCompatActivity() {
             if (resultCode == Activity.RESULT_OK) {
                 // 로그인 성공
                 // Successfully signed in
-                val user = FirebaseAuth.getInstance().currentUser
+                viewModel.fetchData()
                 // ...
             } else {
                 // 로그인 실패 
@@ -179,9 +183,31 @@ class TodoAdapter(
 }
 
 class MainViewModel : ViewModel() {
+    val db = Firebase.firestore
+
     val todoLiveData = MutableLiveData<List<Todo>>()
 
     private val data = arrayListOf<Todo>()  // 밖에서 수정을 막음 private
+
+    init {
+        fetchData()
+    }
+
+    fun fetchData() {
+        db.collection("todos")
+            .get()
+            .addOnSuccessListener { result ->
+                data.clear()
+                for (document in result) {
+                    val todo = Todo(
+                        document.data["text"] as String,
+                        document.data["isDone"] as Boolean,
+                    )
+                    data.add(todo)
+                }
+                todoLiveData.value = data
+            }
+    }
 
     // 완료기능
     fun toggleTodo(todo: Todo) {
